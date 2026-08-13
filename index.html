@@ -296,12 +296,12 @@
             bottom: 20px;
             right: 10px;
             background: var(--panel-bg);
-            padding: 14px 18px 12px 18px;   /* 左右内边距略微增加 */
+            padding: 14px 18px 12px 18px;
             border-radius: 10px;
             z-index: 1000;
             box-shadow: var(--shadow);
             border: 1px solid #e8eef5;
-            width: 280px;                  /* 从 235px 加宽到 280px */
+            width: 280px;
             backdrop-filter: blur(4px);
             max-height: 300px;
             overflow-y: auto;
@@ -349,7 +349,7 @@
         .legend-path-items {
             display: flex;
             flex-wrap: wrap;
-            gap: 4px 12px;   /* 间距稍微拉大，充分利用宽度 */
+            gap: 4px 12px;
         }
         .legend-path-items .legend-item {
             display: flex;
@@ -367,7 +367,7 @@
         .legend-intensity-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
-            gap: 2px 10px;    /* 列间距加大 */
+            gap: 2px 10px;
         }
         .legend-intensity-grid .legend-item {
             display: flex;
@@ -443,6 +443,10 @@
         }
         .dot-suty {
             background: #9b59b6;
+        }
+        /* 新增温带气旋颜色（比低壓區深） */
+        .dot-ex {
+            background: #b0b0b0;
         }
 
         /* ===== 雷達UI (左下) ===== */
@@ -634,7 +638,6 @@
                 font-size: 12px;
                 padding: 6px 10px;
             }
-            /* 图例在平板下占满宽度，但保持内边距 */
             .professional-legend {
                 width: calc(100% - 24px);
                 left: 12px;
@@ -644,7 +647,7 @@
                 max-height: 180px;
             }
             .legend-intensity-grid {
-                grid-template-columns: 1fr 1fr 1fr; /* 三列更紧凑 */
+                grid-template-columns: 1fr 1fr 1fr;
             }
             .radar-ui {
                 bottom: 70px;
@@ -924,6 +927,8 @@
                 <div class="legend-item"><span class="dot dot-ty"></span><span class="label-text">TY 颱風</span></div>
                 <div class="legend-item"><span class="dot dot-sty"></span><span class="label-text">STY 強颱風</span></div>
                 <div class="legend-item" style="grid-column: 1 / -1; justify-self: start;"><span class="dot dot-suty"></span><span class="label-text">SUTY 超強颱風</span></div>
+                <!-- ★ 新增溫帶氣旋，置於超強颱風下方，顏色比低壓區深 -->
+                <div class="legend-item" style="grid-column: 1 / -1; justify-self: start;"><span class="dot dot-ex"></span><span class="label-text">EX 溫帶氣旋</span></div>
             </div>
         </div>
 
@@ -936,9 +941,10 @@
         const TC_LIST = ['G'];
         const TC_DISPLAY_NAMES = { 'G': '浪卡' };
 
+        // ★ 修改 EX 顏色為 #b0b0b0（比 LPA 的 #dcdcdc 深）
         const intensityColors = {
             "LPA": "#dcdcdc",
-            "EX": "#dcdcdc",
+            "EX": "#b0b0b0",
             "TD": "#eee8aa",
             "TS": "#3498db",
             "STS": "#2ecc71",
@@ -1333,7 +1339,7 @@
                 }
 
                 L.polyline(pastData.map(d => [d.lat, d.lng]), { color: '#000000', weight: 3, opacity: 1 }).addTo(
-                trackLayer);
+                    trackLayer);
                 pastData.slice(0, -1).forEach(d =>
                     L.circleMarker([d.lat, d.lng], { radius: 5, fillColor: '#000000', color: '#000000', weight: 1,
                         fillOpacity: 1 }).addTo(trackLayer).bindPopup(createPopupContent(d, 'past'))
