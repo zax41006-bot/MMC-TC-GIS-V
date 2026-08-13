@@ -1,0 +1,1611 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <title>MMC 熱帶氣旋預報GIS</title>
+    <meta charset="utf-8" />
+    <meta content="width=device-width, initial-scale=1.0" name="viewport">
+    <link href="https://unpkg.com/leaflet/dist/leaflet.css" rel="stylesheet" />
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js">
+    </script>
+    <script src="https://unpkg.com/@turf/turf@6/turf.min.js">
+    </script>
+    <style>
+        /* ===== 全局重置 ===== */
+        * {
+            box-sizing: border-box;
+        }
+        :root {
+            --panel-bg: rgba(255, 255, 255, 0.94);
+            --accent: #1a3a5c;
+            --text-dark: #1e2a3a;
+            --shadow: 0 2px 16px rgba(0, 0, 0, 0.10);
+        }
+        body {
+            margin: 0;
+            font-family: 'Segoe UI', 'Microsoft JhengHei', 'PingFang SC', sans-serif;
+            overflow: hidden;
+            background: #e8edf2;
+        }
+
+        /* ===== 頂部欄位 ===== */
+        .header {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 52px;
+            background: #ffffff;
+            color: var(--text-dark);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 18px 0 22px;
+            z-index: 1100;
+            box-shadow: 0 1px 6px rgba(0, 0, 0, 0.08);
+            border-bottom: 2px solid #e6eef5;
+        }
+        .header-brand {
+            display: flex;
+            align-items: baseline;
+            gap: 12px;
+            font-weight: 600;
+            font-size: 17px;
+            letter-spacing: 0.5px;
+            color: var(--accent);
+        }
+        .header-brand small {
+            font-weight: 400;
+            font-size: 13px;
+            color: #5a7a9a;
+            letter-spacing: 0.3px;
+        }
+        .header-brand .badge {
+            background: #e67e22;
+            color: #fff;
+            font-size: 10px;
+            padding: 1px 10px;
+            border-radius: 12px;
+            font-weight: 600;
+            margin-left: 4px;
+        }
+        .header-controls {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .header-controls select,
+        .header-controls button {
+            font-family: inherit;
+        }
+        #tc-selector {
+            background: #f2f6fa;
+            border: 1px solid #d0dbe8;
+            border-radius: 5px;
+            padding: 5px 10px;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-dark);
+            cursor: pointer;
+            outline: none;
+            transition: 0.2s;
+        }
+        #tc-selector:hover {
+            border-color: #8aa9c9;
+        }
+        .fc-play-btn {
+            background: #27ae60;
+            color: #fff;
+            border: none;
+            padding: 5px 16px;
+            border-radius: 5px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: 0.2s;
+            letter-spacing: 0.5px;
+        }
+        .fc-play-btn:hover {
+            background: #1e8e4e;
+        }
+        .fc-speed-select {
+            background: #f2f6fa;
+            border: 1px solid #d0dbe8;
+            border-radius: 5px;
+            padding: 5px 8px;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            outline: none;
+            color: var(--text-dark);
+        }
+        .fc-speed-select:hover {
+            border-color: #8aa9c9;
+        }
+
+        /* ===== 地圖容器 ===== */
+        #mapid {
+            position: absolute;
+            top: 52px;
+            left: 0;
+            bottom: 0;
+            right: 0;
+            background: #c8dce8;
+        }
+
+        /* ===== 左上角資訊面板 ===== */
+        #tc-info-panel {
+            position: absolute;
+            top: 68px;
+            left: 14px;
+            z-index: 1005;
+            background: rgba(255, 255, 255, 0.92);
+            backdrop-filter: blur(6px);
+            -webkit-backdrop-filter: blur(6px);
+            padding: 12px 18px 10px 18px;
+            border-radius: 8px;
+            min-width: 190px;
+            box-shadow: var(--shadow);
+            border: 1px solid rgba(255, 255, 255, 0.6);
+            transition: opacity 0.25s ease;
+            pointer-events: none;
+            user-select: none;
+        }
+        #tc-info-panel .panel-brand {
+            font-size: 12px;
+            font-weight: 600;
+            color: #3a5a7a;
+            letter-spacing: 0.8px;
+            padding-bottom: 5px;
+            border-bottom: 2px solid #e6edf5;
+            margin-bottom: 6px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        #tc-info-panel .panel-brand span {
+            background: #e67e22;
+            color: #fff;
+            font-size: 9px;
+            padding: 0 8px;
+            border-radius: 10px;
+            font-weight: 700;
+        }
+        .panel-main-row {
+            display: flex;
+            align-items: baseline;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        .panel-intensity {
+            font-size: 22px;
+            font-weight: 700;
+            color: #1a3a5c;
+            line-height: 1.2;
+        }
+        .panel-name {
+            font-size: 22px;
+            font-weight: 700;
+            color: #c0392b;
+            line-height: 1.2;
+        }
+        .panel-sub-row {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            margin-top: 4px;
+            font-size: 14px;
+            color: #3d5a78;
+            font-weight: 500;
+            flex-wrap: wrap;
+        }
+        .panel-sub-row .label {
+            font-weight: 400;
+            color: #7a8fa5;
+            font-size: 12px;
+        }
+        .panel-sub-row .fc-tag {
+            background: #1a3a5c;
+            color: #fff;
+            padding: 1px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            letter-spacing: 0.3px;
+        }
+        .panel-sub-row .time-str {
+            color: #2c3e50;
+            font-weight: 500;
+        }
+
+        /* ===== 右上角下拉 ===== */
+        #map-type-selector {
+            position: absolute;
+            top: 64px;
+            right: 10px;
+            z-index: 1005;
+            background: var(--panel-bg);
+            border: 1px solid #d8e0e8;
+            padding: 6px 10px;
+            border-radius: 5px;
+            font-size: 13px;
+            box-shadow: var(--shadow);
+            outline: none;
+            font-weight: 500;
+            color: var(--text-dark);
+            cursor: pointer;
+            width: 130px;
+        }
+        #map-type-selector:hover {
+            border-color: #8aa9c9;
+        }
+        .weather-layer-selector {
+            position: absolute;
+            top: 104px;
+            right: 10px;
+            z-index: 1005;
+            background: #3498db;
+            color: #fff;
+            border: none;
+            padding: 6px 10px;
+            border-radius: 5px;
+            font-weight: 600;
+            box-shadow: var(--shadow);
+            cursor: pointer;
+            font-size: 13px;
+            width: 130px;
+            outline: none;
+            transition: 0.2s;
+        }
+        .weather-layer-selector:hover {
+            background: #2c81ba;
+        }
+
+        /* ===== 距離面板 ===== */
+        #distance-panel {
+            position: absolute;
+            top: 144px;
+            right: 10px;
+            z-index: 1005;
+            background: var(--panel-bg);
+            padding: 10px 14px;
+            border-radius: 6px;
+            box-shadow: var(--shadow);
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-dark);
+            min-width: 150px;
+            line-height: 1.7;
+            border: 1px solid #e8eef5;
+            backdrop-filter: blur(4px);
+        }
+        #distance-panel strong {
+            display: block;
+            border-bottom: 2px solid #e8eef5;
+            padding-bottom: 4px;
+            margin-bottom: 4px;
+            font-size: 13px;
+            color: var(--accent);
+        }
+
+        /* ================================================================
+                   ★★★ 圖例 - 加寬版 ★★★
+                   ================================================================ */
+        .professional-legend {
+            position: absolute;
+            bottom: 20px;
+            right: 10px;
+            background: var(--panel-bg);
+            padding: 14px 18px 12px 18px;   /* 左右内边距略微增加 */
+            border-radius: 10px;
+            z-index: 1000;
+            box-shadow: var(--shadow);
+            border: 1px solid #e8eef5;
+            width: 280px;                  /* 从 235px 加宽到 280px */
+            backdrop-filter: blur(4px);
+            max-height: 300px;
+            overflow-y: auto;
+            transition: all 0.2s;
+        }
+
+        /* 图例滚动条美化 */
+        .professional-legend::-webkit-scrollbar {
+            width: 4px;
+        }
+        .professional-legend::-webkit-scrollbar-track {
+            background: #f0f4f8;
+            border-radius: 4px;
+        }
+        .professional-legend::-webkit-scrollbar-thumb {
+            background: #c0cedc;
+            border-radius: 4px;
+        }
+
+        /* 每个区块 */
+        .legend-block {
+            margin-bottom: 10px;
+        }
+        .legend-block:last-child {
+            margin-bottom: 0;
+        }
+
+        .legend-block-title {
+            font-weight: 700;
+            font-size: 12px;
+            color: var(--accent);
+            letter-spacing: 0.6px;
+            padding-bottom: 5px;
+            border-bottom: 2px solid #e8eef5;
+            margin-bottom: 6px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .legend-block-title .badge-icon {
+            font-size: 13px;
+        }
+
+        /* 路径图例 - 横向流式布局 */
+        .legend-path-items {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px 12px;   /* 间距稍微拉大，充分利用宽度 */
+        }
+        .legend-path-items .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 11px;
+            color: #2c3e50;
+            white-space: nowrap;
+        }
+        .legend-path-items .legend-item .icon {
+            flex-shrink: 0;
+        }
+
+        /* 强度等级 - 网格两列 */
+        .legend-intensity-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2px 10px;    /* 列间距加大 */
+        }
+        .legend-intensity-grid .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 11px;
+            color: #2c3e50;
+            padding: 2px 0;
+            min-width: 0;
+        }
+        .legend-intensity-grid .legend-item .dot {
+            flex-shrink: 0;
+        }
+        .legend-intensity-grid .legend-item .label-text {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        /* 图例图标统一定义 */
+        .dot {
+            width: 13px;
+            height: 13px;
+            border-radius: 50%;
+            border: 1px solid rgba(0, 0, 0, 0.25);
+            flex-shrink: 0;
+        }
+        .dot-current {
+            background: #fff;
+            border: 2.5px solid #000;
+            width: 12px;
+            height: 12px;
+        }
+        .line-icon {
+            width: 22px;
+            height: 3px;
+            border-radius: 2px;
+            flex-shrink: 0;
+        }
+        .line-past {
+            background: #000;
+        }
+        .line-forecast {
+            background: #3498db;
+        }
+        .box-icon {
+            width: 13px;
+            height: 13px;
+            border: 2px dashed #8bc34a;
+            background: rgba(205, 220, 57, 0.12);
+            border-radius: 2px;
+            flex-shrink: 0;
+        }
+
+        /* 强度颜色点 */
+        .dot-lpa {
+            background: #dcdcdc;
+        }
+        .dot-td {
+            background: #eee8aa;
+        }
+        .dot-ts {
+            background: #3498db;
+        }
+        .dot-sts {
+            background: #2ecc71;
+        }
+        .dot-ty {
+            background: #ffa200f6;
+        }
+        .dot-sty {
+            background: #ff0000;
+        }
+        .dot-suty {
+            background: #9b59b6;
+        }
+
+        /* ===== 雷達UI (左下) ===== */
+        .radar-ui {
+            position: absolute;
+            bottom: 82px;
+            left: 12px;
+            background: var(--panel-bg);
+            padding: 10px 14px 10px 14px;
+            border-radius: 8px;
+            z-index: 1000;
+            box-shadow: var(--shadow);
+            border: 1px solid #e8eef5;
+            width: 260px;
+            display: none;
+            backdrop-filter: blur(4px);
+        }
+        .radar-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 6px;
+            padding-bottom: 6px;
+            border-bottom: 1px solid #e8eef5;
+        }
+        #timestamp {
+            font-size: 15px;
+            font-weight: 600;
+            color: #1a3a5c;
+        }
+        .buttons {
+            display: flex;
+            gap: 4px;
+        }
+        .buttons button {
+            width: 32px;
+            height: 30px;
+            border: 1px solid #d8e0e8;
+            border-radius: 4px;
+            background: #fff;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-dark);
+            transition: 0.15s;
+        }
+        .buttons button:hover {
+            background: #f0f5fa;
+            border-color: #8aa9c9;
+        }
+        .radar-legend-bar {
+            height: 10px;
+            width: 100%;
+            border-radius: 3px;
+            margin-bottom: 4px;
+            background: linear-gradient(to right, #827b69 0%, #ded097 19%, #88ddee 20%, #005588 46%, #ffee00 46.5%, #ff8100 59%, #ff4400 60%, #5d0000 72%, #ffaaff 73.5%, #ff4eff 86%, #ffffff 86.5%, #ffffff 99%, #00ff00 100%);
+        }
+        .radar-legend-labels {
+            display: flex;
+            justify-content: space-between;
+            font-size: 9px;
+            color: #666;
+            font-weight: 600;
+        }
+
+        /* ===== Leaflet 縮放控制 ===== */
+        .leaflet-control-zoom {
+            position: absolute;
+            bottom: 20px !important;
+            left: 12px !important;
+            top: auto !important;
+            z-index: 1002;
+            box-shadow: var(--shadow) !important;
+            border-radius: 6px !important;
+            overflow: hidden;
+        }
+        .leaflet-control-zoom a {
+            background: #fff !important;
+            color: var(--text-dark) !important;
+            border: 1px solid #d8e0e8 !important;
+            width: 32px !important;
+            height: 32px !important;
+            line-height: 32px !important;
+            font-size: 18px !important;
+            font-weight: 600 !important;
+            transition: 0.15s;
+        }
+        .leaflet-control-zoom a:hover {
+            background: #f0f5fa !important;
+            border-color: #8aa9c9 !important;
+        }
+
+        /* ===== 圖片覆蓋 ===== */
+        #img-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.88);
+            z-index: 2000;
+            justify-content: center;
+            align-items: center;
+            cursor: zoom-out;
+        }
+        #img-overlay img {
+            max-width: 95%;
+            max-height: 90%;
+            border: 3px solid #fff;
+            border-radius: 6px;
+            box-shadow: 0 0 40px rgba(0, 0, 0, 0.5);
+        }
+        .close-btn {
+            position: absolute;
+            top: 20px;
+            right: 30px;
+            color: #fff;
+            font-size: 40px;
+            cursor: pointer;
+            font-weight: 300;
+        }
+
+        /* ===== 响应式 - 同步加宽 ===== */
+        @media screen and (max-width: 820px) {
+            .header {
+                padding: 0 12px;
+                height: 48px;
+                flex-wrap: wrap;
+            }
+            .header-brand {
+                font-size: 14px;
+                gap: 6px;
+            }
+            .header-brand small {
+                font-size: 11px;
+            }
+            .header-controls {
+                gap: 6px;
+            }
+            #tc-selector {
+                font-size: 12px;
+                padding: 4px 8px;
+            }
+            .fc-play-btn {
+                font-size: 12px;
+                padding: 4px 12px;
+            }
+            .fc-speed-select {
+                font-size: 12px;
+                padding: 4px 6px;
+            }
+            #tc-info-panel {
+                top: 58px;
+                left: 10px;
+                padding: 8px 12px 6px 12px;
+                min-width: 140px;
+            }
+            .panel-intensity,
+            .panel-name {
+                font-size: 17px;
+            }
+            .panel-sub-row {
+                font-size: 12px;
+                gap: 8px;
+            }
+            .panel-sub-row .fc-tag {
+                font-size: 10px;
+                padding: 0 8px;
+            }
+            #map-type-selector {
+                top: 58px;
+                right: 8px;
+                width: 100px;
+                font-size: 12px;
+                padding: 4px 8px;
+            }
+            .weather-layer-selector {
+                top: 94px;
+                right: 8px;
+                width: 100px;
+                font-size: 12px;
+                padding: 4px 8px;
+            }
+            #distance-panel {
+                top: 130px;
+                right: 8px;
+                min-width: 110px;
+                font-size: 12px;
+                padding: 6px 10px;
+            }
+            /* 图例在平板下占满宽度，但保持内边距 */
+            .professional-legend {
+                width: calc(100% - 24px);
+                left: 12px;
+                right: 12px;
+                bottom: 12px;
+                padding: 12px 16px 10px 16px;
+                max-height: 180px;
+            }
+            .legend-intensity-grid {
+                grid-template-columns: 1fr 1fr 1fr; /* 三列更紧凑 */
+            }
+            .radar-ui {
+                bottom: 70px;
+                left: 10px;
+                width: 220px;
+                padding: 8px 10px;
+            }
+            #timestamp {
+                font-size: 13px;
+            }
+            .buttons button {
+                width: 28px;
+                height: 26px;
+                font-size: 12px;
+            }
+            .leaflet-control-zoom {
+                bottom: 16px !important;
+                left: 10px !important;
+            }
+            .leaflet-control-zoom a {
+                width: 28px !important;
+                height: 28px !important;
+                line-height: 28px !important;
+                font-size: 15px !important;
+            }
+        }
+
+        @media screen and (max-width: 480px) {
+            .header-brand {
+                font-size: 12px;
+            }
+            .header-brand small {
+                font-size: 10px;
+            }
+            .header-controls select,
+            .header-controls button {
+                font-size: 10px;
+                padding: 3px 6px;
+            }
+            #tc-info-panel {
+                top: 54px;
+                left: 6px;
+                padding: 6px 10px 4px 10px;
+                min-width: 110px;
+            }
+            .panel-intensity,
+            .panel-name {
+                font-size: 14px;
+            }
+            .panel-sub-row {
+                font-size: 10px;
+                gap: 4px;
+                flex-wrap: wrap;
+            }
+            .panel-sub-row .fc-tag {
+                font-size: 9px;
+                padding: 0 6px;
+            }
+            #map-type-selector {
+                top: 54px;
+                right: 6px;
+                width: 80px;
+                font-size: 10px;
+                padding: 3px 6px;
+            }
+            .weather-layer-selector {
+                top: 84px;
+                right: 6px;
+                width: 80px;
+                font-size: 10px;
+                padding: 3px 6px;
+            }
+            #distance-panel {
+                top: 114px;
+                right: 6px;
+                min-width: 80px;
+                font-size: 10px;
+                padding: 4px 8px;
+            }
+            .professional-legend {
+                max-height: 150px;
+                padding: 8px 12px 6px 12px;
+                width: calc(100% - 16px);
+                left: 8px;
+                right: 8px;
+                bottom: 8px;
+            }
+            .legend-block-title {
+                font-size: 10px;
+            }
+            .legend-path-items .legend-item {
+                font-size: 9px;
+                gap: 3px;
+            }
+            .legend-intensity-grid .legend-item {
+                font-size: 9px;
+                gap: 3px;
+            }
+            .dot {
+                width: 10px;
+                height: 10px;
+            }
+            .dot-current {
+                width: 10px;
+                height: 10px;
+            }
+            .line-icon {
+                width: 16px;
+                height: 2px;
+            }
+            .box-icon {
+                width: 10px;
+                height: 10px;
+            }
+            .legend-intensity-grid {
+                grid-template-columns: 1fr 1fr;
+            }
+            .radar-ui {
+                bottom: 60px;
+                left: 6px;
+                width: 170px;
+                padding: 6px 8px;
+            }
+            #timestamp {
+                font-size: 11px;
+            }
+            .buttons button {
+                width: 24px;
+                height: 22px;
+                font-size: 10px;
+            }
+            .radar-legend-labels {
+                font-size: 7px;
+            }
+            .leaflet-control-zoom {
+                bottom: 12px !important;
+                left: 6px !important;
+            }
+            .leaflet-control-zoom a {
+                width: 24px !important;
+                height: 24px !important;
+                line-height: 24px !important;
+                font-size: 13px !important;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ===== 頂部欄位 ===== -->
+    <div class="header">
+        <div class="header-brand">
+            <span>🌀 MMC</span>
+            <small>熱帶氣旋預報</small>
+            <span class="badge">測試版</span>
+        </div>
+        <div class="header-controls">
+            <select id="tc-selector" onchange="init()">
+                <option value="all" selected>所有熱帶氣旋</option>
+                <option value="G">浪卡</option>
+            </select>
+            <button id="fc-play-btn" class="fc-play-btn" onclick="toggleForecastPlay()">▶ 播放</button>
+            <select id="fc-speed-select" class="fc-speed-select" onchange="setForecastSpeed(this.value)">
+                <option value="0.5">0.5×</option>
+                <option value="1" selected>1×</option>
+                <option value="2">2×</option>
+                <option value="4">4×</option>
+            </select>
+        </div>
+    </div>
+
+    <!-- ===== 地圖容器 ===== -->
+    <div id="mapid"></div>
+
+    <!-- ===== 左上角資訊面板 ===== -->
+    <div id="tc-info-panel">
+        <div class="panel-brand">
+            🌀 熱帶氣旋預報
+        </div>
+        <div class="panel-main-row">
+            <span class="panel-intensity" id="fc-intensity">--</span>
+            <span class="panel-name" id="fc-name">--</span>
+        </div>
+        <div class="panel-sub-row">
+            <span class="fc-tag" id="fc-tag">+00h</span>
+            <span class="time-str" id="fc-datetime">--</span>
+        </div>
+    </div>
+
+    <!-- ===== 地圖類型 ===== -->
+    <select id="map-type-selector" onchange="changeMapType(this.value)">
+        <option value="light">淺色地圖</option>
+        <option value="dark">深色地圖</option>
+        <option value="satellite">衛星地圖</option>
+    </select>
+
+    <!-- ===== 天氣圖層 ===== -->
+    <select id="weather-layer-selector" class="weather-layer-selector" onchange="handleWeatherLayerChange(this.value)">
+        <option value="none">純地圖</option>
+        <option value="radar">雷達圖像</option>
+        <option value="satellite">衛星雲圖</option>
+    </select>
+
+    <!-- ===== 距離澳門 ===== -->
+    <div id="distance-panel">
+        <strong>距離澳門</strong>
+        無資料
+    </div>
+
+    <!-- ===== 圖片覆蓋 ===== -->
+    <div id="img-overlay" onclick="this.style.display='none'">
+        <span class="close-btn">&times;</span>
+        <img id="forecast-img-src" src="" alt="圖片版預報加載中...">
+    </div>
+
+    <!-- ===== 雷達UI ===== -->
+    <div id="radar-ui-container" class="radar-ui">
+        <div class="radar-controls">
+            <span id="timestamp">--:--</span>
+            <div class="buttons">
+                <button onclick="stop(); showFrame(animationPosition - 1);">‹</button>
+                <button id="playBtn" onclick="playStop();">▶</button>
+                <button onclick="stop(); showFrame(animationPosition + 1);">›</button>
+            </div>
+        </div>
+        <div id="radar-legend-subpanel">
+            <div style="display:flex; justify-content:space-between; font-size:11px; font-weight:600; margin-bottom:3px; color:#1a3a5c;">
+                <span>雷達圖例</span><span>dBZ</span>
+            </div>
+            <div class="radar-legend-bar"></div>
+            <div class="radar-legend-labels">
+                <span>5</span><span>15</span><span>25</span><span>35</span><span>45</span><span>55</span><span>65</span><span>75</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================================================================
+    ★★★ 圖例 - 加寬版 ★★★
+    ================================================================ -->
+    <div class="professional-legend">
+
+        <!-- 路徑圖例 -->
+        <div class="legend-block">
+            <div class="legend-block-title">
+                <span class="badge-icon">━</span> 路徑圖例
+            </div>
+            <div class="legend-path-items">
+                <div class="legend-item">
+                    <span class="icon dot-current"></span>
+                    <span>實時位置</span>
+                </div>
+                <div class="legend-item">
+                    <span class="icon line-icon line-past"></span>
+                    <span>過去路徑</span>
+                </div>
+                <div class="legend-item">
+                    <span class="icon line-icon line-forecast"></span>
+                    <span>預報路徑</span>
+                </div>
+                <div class="legend-item">
+                    <span class="icon box-icon"></span>
+                    <span>70% 誤差帶</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 強度等級 -->
+        <div class="legend-block">
+            <div class="legend-block-title">
+                <span class="badge-icon">●</span> 強度等級
+            </div>
+            <div class="legend-intensity-grid">
+                <div class="legend-item"><span class="dot dot-lpa"></span><span class="label-text">LPA 低壓區</span></div>
+                <div class="legend-item"><span class="dot dot-td"></span><span class="label-text">TD 熱帶低氣壓</span></div>
+                <div class="legend-item"><span class="dot dot-ts"></span><span class="label-text">TS 熱帶風暴</span></div>
+                <div class="legend-item"><span class="dot dot-sts"></span><span class="label-text">STS 強烈熱帶風暴</span></div>
+                <div class="legend-item"><span class="dot dot-ty"></span><span class="label-text">TY 颱風</span></div>
+                <div class="legend-item"><span class="dot dot-sty"></span><span class="label-text">STY 強颱風</span></div>
+                <div class="legend-item" style="grid-column: 1 / -1; justify-self: start;"><span class="dot dot-suty"></span><span class="label-text">SUTY 超強颱風</span></div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // ============================================================
+        // 核心配置
+        // ============================================================
+        const TC_LIST = ['G'];
+        const TC_DISPLAY_NAMES = { 'G': '浪卡' };
+
+        const intensityColors = {
+            "LPA": "#dcdcdc",
+            "EX": "#dcdcdc",
+            "TD": "#eee8aa",
+            "TS": "#3498db",
+            "STS": "#2ecc71",
+            "TY": "#ffa200f6",
+            "STY": "#ff0000",
+            "SUTY": "#9b59b6",
+            "default": "#666"
+        };
+        const intensityNames = {
+            "LPA": "低壓區",
+            "TD": "熱帶低氣壓",
+            "TS": "熱帶風暴",
+            "STS": "強烈熱帶風暴",
+            "TY": "颱風",
+            "STY": "強颱風",
+            "SUTY": "超強颱風",
+            "EX": "溫帶氣旋"
+        };
+        const MACAO_COORDS = [22.17, 113.55];
+        const ALERT_CIRCLES = [
+            { r: 100, color: "#A0A0A0", opacity: 0.3 },
+            { r: 200, color: "#808080", opacity: 0.4 },
+            { r: 400, color: "#808080", opacity: 0.5 },
+            { r: 600, color: "#A0A0A0", opacity: 0.6 },
+            { r: 800, color: "#FF4D4D", opacity: 0.7 }
+        ];
+
+        // ============================================================
+        // 地圖初始化
+        // ============================================================
+        var map = L.map('mapid', { zoomControl: false }).setView([18.0, 135.0], 5);
+        L.control.zoom({ position: 'bottomleft' }).addTo(map);
+
+        const baseLayers = {
+            light: L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+                maxZoom: 22,
+                maxNativeZoom: 20,
+                detectRetina: true
+            }),
+            dark: L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                maxZoom: 22,
+                maxNativeZoom: 20,
+                detectRetina: true
+            }),
+            satellite: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+                maxZoom: 22,
+                maxNativeZoom: 19
+            })
+        };
+        baseLayers.light.addTo(map);
+
+        let trackLayer = L.layerGroup().addTo(map);
+        let tcDistances = {};
+
+        function changeMapType(type) {
+            Object.values(baseLayers).forEach(layer => map.removeLayer(layer));
+            baseLayers[type].addTo(map);
+        }
+
+        // ============================================================
+        // 預報動畫核心
+        // ============================================================
+        const forecastAnim = {
+            lineLayer: null,
+            coneLayer: null,
+            markerLayer: null,
+            fullSmoothLine: null,
+            fullCone: null,
+            points: [],
+            latestPoint: null,
+            progress: 0,
+            rafId: null,
+            baseDuration: 2800,
+            speed: 1,
+            isPlaying: false,
+            startTime: null,
+            pausedElapsed: 0,
+            currentTcId: 'G'
+        };
+
+        function stopForecastAnimation() {
+            if (forecastAnim.rafId) {
+                cancelAnimationFrame(forecastAnim.rafId);
+                forecastAnim.rafId = null;
+            }
+            forecastAnim.isPlaying = false;
+            const btn = document.getElementById('fc-play-btn');
+            if (btn) btn.textContent = '▶ 播放';
+        }
+
+        function startForecastAnimation(fromStart) {
+            stopForecastAnimation();
+            if (fromStart) {
+                forecastAnim.progress = 0;
+                forecastAnim.pausedElapsed = 0;
+            }
+            const totalDuration = forecastAnim.baseDuration / forecastAnim.speed;
+            forecastAnim.startTime = performance.now() - forecastAnim.pausedElapsed;
+            forecastAnim.isPlaying = true;
+            const btn = document.getElementById('fc-play-btn');
+            if (btn) btn.textContent = '⏸ 暫停';
+
+            function animateFrame(now) {
+                if (!forecastAnim.isPlaying) return;
+                const elapsed = now - forecastAnim.startTime;
+                forecastAnim.progress = Math.min(elapsed / totalDuration, 1);
+                updateForecastView(forecastAnim.progress);
+                if (forecastAnim.progress < 1) {
+                    forecastAnim.rafId = requestAnimationFrame(animateFrame);
+                } else {
+                    renderAllForecastPoints();
+                    forecastAnim.isPlaying = false;
+                    const btn2 = document.getElementById('fc-play-btn');
+                    if (btn2) btn2.textContent = '▶ 重播';
+                    updateInfoPanel(1);
+                }
+            }
+            forecastAnim.rafId = requestAnimationFrame(animateFrame);
+        }
+
+        function toggleForecastPlay() {
+            if (!forecastAnim.fullSmoothLine || forecastAnim.points.length === 0) return;
+            if (forecastAnim.isPlaying) {
+                forecastAnim.pausedElapsed = forecastAnim.progress * (forecastAnim.baseDuration / forecastAnim.speed);
+                stopForecastAnimation();
+            } else {
+                if (forecastAnim.progress >= 1) {
+                    startForecastAnimation(true);
+                } else {
+                    startForecastAnimation(false);
+                }
+            }
+        }
+
+        function setForecastSpeed(speedValue) {
+            forecastAnim.speed = parseFloat(speedValue);
+            if (forecastAnim.isPlaying) {
+                forecastAnim.pausedElapsed = forecastAnim.progress * (forecastAnim.baseDuration / forecastAnim.speed);
+                forecastAnim.startTime = performance.now() - forecastAnim.pausedElapsed;
+            }
+        }
+
+        // ============================================================
+        // 左上角資訊面板更新
+        // ============================================================
+        function updateInfoPanel(progress) {
+            const pts = forecastAnim.points;
+            if (!pts || pts.length === 0) {
+                document.getElementById('fc-intensity').textContent = '--';
+                document.getElementById('fc-name').textContent = '--';
+                document.getElementById('fc-tag').textContent = '--';
+                document.getElementById('fc-datetime').textContent = '--';
+                return;
+            }
+            const total = pts.length;
+            const idx = Math.min(Math.floor(progress * total), total - 1);
+            const p = pts[idx];
+            if (!p) return;
+
+            const inten = p.intensity || 'TD';
+            const displayInten = intensityNames[inten] || inten;
+            const name = TC_DISPLAY_NAMES[forecastAnim.currentTcId] || forecastAnim.currentTcId || '--';
+
+            document.getElementById('fc-intensity').textContent = displayInten;
+            document.getElementById('fc-name').textContent = name;
+
+            const fh = p.f_time !== undefined ? p.f_time : 0;
+            const tag = (fh >= 0) ? `+${fh}h` : `${fh}h`;
+            document.getElementById('fc-tag').textContent = tag;
+
+            const base = forecastAnim.latestPoint ? forecastAnim.latestPoint.datetime : null;
+            if (base && p.f_time !== undefined) {
+                const dt = calculateForecastTimeStr(base, p.f_time);
+                document.getElementById('fc-datetime').textContent = dt;
+            } else {
+                document.getElementById('fc-datetime').textContent = p.datetime || '--';
+            }
+
+            const color = intensityColors[inten] || intensityColors.default;
+            document.getElementById('fc-intensity').style.color = color;
+        }
+
+        function calculateForecastTimeStr(baseTimeStr, addHours) {
+            if (!baseTimeStr) return `+${addHours}h`;
+            const parts = baseTimeStr.trim().split(' ');
+            if (parts.length !== 2) return `+${addHours}h`;
+            const dateParts = parts[0].split('/');
+            const timeParts = parts[1].split(':');
+            if (dateParts.length !== 3 || timeParts.length !== 2) return `+${addHours}h`;
+            const date = new Date(dateParts[2], parseInt(dateParts[1]) - 1, dateParts[0], timeParts[0], timeParts[1]);
+            date.setHours(date.getHours() + parseFloat(addHours));
+            const mo = String(date.getMonth() + 1).padStart(2, '0');
+            const da = String(date.getDate()).padStart(2, '0');
+            const hh = String(date.getHours()).padStart(2, '0');
+            const mm = String(date.getMinutes()).padStart(2, '0');
+            return `${da}/${mo} ${hh}:${mm}`;
+        }
+
+        // ============================================================
+        // 預報視圖更新
+        // ============================================================
+        function updateForecastView(progress) {
+            if (!forecastAnim.fullSmoothLine) return;
+            const totalLen = turf.length(forecastAnim.fullSmoothLine, { units: 'kilometers' });
+            const currentLen = totalLen * progress;
+
+            if (currentLen > 0.01) {
+                const sliced = turf.lineSliceAlong(forecastAnim.fullSmoothLine, 0, currentLen, { units: 'kilometers' });
+                forecastAnim.lineLayer.clearLayers().addData(sliced);
+            }
+
+            if (forecastAnim.points.length > 0 && currentLen > 0) {
+                const totalPts = forecastAnim.points.length;
+                const exactIdx = progress * totalPts;
+                const intIdx = Math.floor(exactIdx);
+                const fraction = exactIdx - intIdx;
+                const coneParts = [];
+                let prevPt = turf.point([forecastAnim.latestPoint.lng, forecastAnim.latestPoint.lat]);
+                let prevR = 0;
+                for (let i = 0; i < intIdx; i++) {
+                    const d = forecastAnim.points[i];
+                    const currPt = turf.point([d.lng, d.lat]);
+                    const currR = (d.f_time / 24) * 100;
+                    if (currR > 0) coneParts.push(turf.circle(currPt, currR, { units: 'kilometers' }));
+                    coneParts.push(getSegmentSector(prevPt, prevR, currPt, currR));
+                    prevPt = currPt;
+                    prevR = currR;
+                }
+                if (fraction > 0 && intIdx < totalPts) {
+                    const d = forecastAnim.points[intIdx];
+                    const endPt = turf.point([d.lng, d.lat]);
+                    const endR = (d.f_time / 24) * 100;
+                    const segDist = turf.distance(prevPt, endPt, { units: 'kilometers' });
+                    const interpPt = turf.destination(prevPt, segDist * fraction, turf.bearing(prevPt, endPt), { units: 'kilometers' });
+                    const interpR = prevR + (endR - prevR) * fraction;
+                    if (interpR > 0) coneParts.push(turf.circle(interpPt, interpR, { units: 'kilometers' }));
+                    coneParts.push(getSegmentSector(prevPt, prevR, interpPt, interpR));
+                }
+                if (coneParts.length > 0) {
+                    let combinedCone = coneParts[0];
+                    for (let i = 1; i < coneParts.length; i++) {
+                        combinedCone = turf.union(combinedCone, coneParts[i]);
+                    }
+                    forecastAnim.coneLayer.clearLayers().addData(combinedCone);
+                }
+            }
+
+            renderVisibleForecastPoints(progress);
+            updateInfoPanel(progress);
+        }
+
+        function renderVisibleForecastPoints(progress) {
+            if (!forecastAnim.points.length) return;
+            const visibleCount = Math.floor(progress * forecastAnim.points.length);
+            forecastAnim.markerLayer.clearLayers();
+            for (let i = 0; i < visibleCount; i++) {
+                const d = forecastAnim.points[i];
+                L.circleMarker([d.lat, d.lng], {
+                    radius: 5,
+                    fillColor: intensityColors[d.intensity] || intensityColors.default,
+                    color: "#222",
+                    weight: 1,
+                    fillOpacity: 0.9
+                }).addTo(forecastAnim.markerLayer)
+                    .bindPopup(createPopupContent(d, 'forecast', forecastAnim.latestPoint ? forecastAnim.latestPoint.datetime :
+                        null));
+            }
+        }
+
+        function renderAllForecastPoints() {
+            forecastAnim.markerLayer.clearLayers();
+            forecastAnim.points.forEach(d => {
+                L.circleMarker([d.lat, d.lng], {
+                    radius: 5,
+                    fillColor: intensityColors[d.intensity] || intensityColors.default,
+                    color: "#222",
+                    weight: 1,
+                    fillOpacity: 0.9
+                }).addTo(forecastAnim.markerLayer)
+                    .bindPopup(createPopupContent(d, 'forecast', forecastAnim.latestPoint ? forecastAnim.latestPoint.datetime :
+                        null));
+            });
+        }
+
+        // ============================================================
+        // 工具函數
+        // ============================================================
+        function getSegmentSector(p1, r1, p2, r2) {
+            const bearing = turf.bearing(p1, p2);
+            const p1_l = turf.destination(p1, r1, bearing - 90, { units: 'kilometers' });
+            const p1_r = turf.destination(p1, r1, bearing + 90, { units: 'kilometers' });
+            const p2_l = turf.destination(p2, r2, bearing - 90, { units: 'kilometers' });
+            const p2_r = turf.destination(p2, r2, bearing + 90, { units: 'kilometers' });
+            return turf.polygon([
+                [p1_l.geometry.coordinates, p2_l.geometry.coordinates, p2_r.geometry.coordinates, p1_r.geometry.coordinates,
+                    p1_l.geometry.coordinates
+                ]
+            ]);
+        }
+
+        function parseCSV(text) {
+            const lines = text.trim().split('\n');
+            if (lines.length < 2) return [];
+            const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+            return lines.slice(1).map(line => {
+                const values = line.split(',');
+                let obj = {};
+                headers.forEach((h, i) => {
+                    let val = values[i] ? values[i].trim() : "";
+                    if (['lat', 'lng', 'lon', 'f_time', 'wind', 'minimum central pressure'].includes(h)) val =
+                        parseFloat(val);
+                    obj[h] = val;
+                });
+                if (obj.lon && !obj.lng) obj.lng = obj.lon;
+                return obj;
+            });
+        }
+
+        function createPopupContent(data, type, baseTimeStr) {
+            const timeValue = data.datetime || data.time || 'N/A';
+            let header = type === 'current' ? ' 實時位置 ' : (type === 'forecast' ? ' 預報位置' : ' 過去位置');
+            let timeLabel = (type === 'past' || type === 'current') ? `時間: ${timeValue}` :
+                `預報時間: ${calculateForecastTimeStr(baseTimeStr, data.f_time)}`;
+            let distanceStr = '--';
+            if (typeof data.lat === 'number' && typeof data.lng === 'number') {
+                const dist = turf.distance(turf.point([data.lng, data.lat]), turf.point([MACAO_COORDS[1], MACAO_COORDS[0]]), {
+                    units: 'kilometers'
+                });
+                distanceStr = dist.toFixed(1) + ' 公里';
+            }
+            return `<div class="popup-title">${header}</div>
+                        <div class="popup-item"> ${timeLabel}</div>
+                        <div class="popup-item"> 位置: ${data.lat.toFixed(1)}°N, ${data.lng.toFixed(1)}°E</div>
+                        <div class="popup-item"> 距離澳門: ${distanceStr}</div>
+                        <div class="popup-item"> 強度: ${intensityNames[data.intensity] || data.intensity}</div>
+                        <div class="popup-item"> 近中心最大風速: ${data.wind || '--'} kph</div>
+                        <div class="popup-item"> 中心氣壓: ${data['minimum central pressure'] || '--'} hPa</div>`;
+        }
+
+        function drawAlertCircles(layer) {
+            const center = turf.point([MACAO_COORDS[1], MACAO_COORDS[0]]);
+            fetch('https://nominatim.openstreetmap.org/search?q=Macau&format=geojson&polygon_geojson=1&limit=1')
+                .then(res => res.json())
+                .then(data => {
+                    if (data && data.features && data.features.length > 0) {
+                        L.geoJSON(data.features[0].geometry, { style: { color: 'red', weight: 2, fillOpacity: 0,
+                                opacity: 1 } }).addTo(layer);
+                    }
+                }).catch(err => console.error("獲取澳門邊界失敗: ", err));
+            ALERT_CIRCLES.forEach(circle => {
+                L.geoJSON(turf.circle(center, circle.r, { units: 'kilometers' }), {
+                    style: { color: circle.color, weight: 1.2, fillColor: 'transparent', dashArray: '5, 8',
+                        opacity: circle.opacity }
+                }).addTo(layer);
+                const labelPos = turf.destination(center, circle.r, 180, { units: 'kilometers' });
+                L.marker([labelPos.geometry.coordinates[1], labelPos.geometry.coordinates[0]], {
+                    icon: L.divIcon({
+                        html: `<div style="color: ${circle.color}; font-weight: bold; font-size: 11px; white-space: nowrap; opacity: ${Math.min(1, circle.opacity + 0.3)}; text-shadow: 1px 1px 1px white;">${circle.r}km</div>`,
+                        className: 'circle-label',
+                        iconSize: [60, 20],
+                        iconAnchor: [30, -2]
+                    })
+                }).addTo(layer);
+            });
+        }
+
+        // ============================================================
+        // 繪製單一熱帶氣旋
+        // ============================================================
+        async function drawSingleTC(tcId) {
+            const githubBaseUrl = 'https://raw.githubusercontent.com/zax41006-bot/TC-Track/main';
+            try {
+                const [pRes, fRes] = await Promise.all([
+                    fetch(`${githubBaseUrl}/past_track_${tcId}.csv`).catch(() => ({ text: () => "" })),
+                    fetch(`${githubBaseUrl}/forecast_track_${tcId}.csv`).catch(() => ({ text: () => "" }))
+                ]);
+                const pastData = parseCSV(await pRes.text());
+                const forecastData = parseCSV(await fRes.text());
+                if (pastData.length === 0) {
+                    tcDistances[tcId] = null;
+                    return [];
+                }
+                const latestPoint = pastData[pastData.length - 1];
+                const baseTimeStr = latestPoint.datetime;
+                if (latestPoint.lat !== undefined && latestPoint.lng !== undefined) {
+                    const dist = turf.distance(turf.point([latestPoint.lng, latestPoint.lat]), turf.point([MACAO_COORDS[1],
+                        MACAO_COORDS[0]
+                    ]), { units: 'kilometers' });
+                    tcDistances[tcId] = dist.toFixed(1);
+                } else {
+                    tcDistances[tcId] = null;
+                }
+
+                L.polyline(pastData.map(d => [d.lat, d.lng]), { color: '#000000', weight: 3, opacity: 1 }).addTo(
+                trackLayer);
+                pastData.slice(0, -1).forEach(d =>
+                    L.circleMarker([d.lat, d.lng], { radius: 5, fillColor: '#000000', color: '#000000', weight: 1,
+                        fillOpacity: 1 }).addTo(trackLayer).bindPopup(createPopupContent(d, 'past'))
+                );
+
+                L.circleMarker([latestPoint.lat, latestPoint.lng], {
+                    radius: 8,
+                    fillColor: intensityColors[latestPoint.intensity] || intensityColors.default,
+                    color: "#000000",
+                    weight: 2.5,
+                    fillOpacity: 1
+                }).addTo(trackLayer).bindPopup(createPopupContent(latestPoint, 'current')).bringToFront();
+
+                if (forecastData.length > 0) {
+                    const fCoords = [
+                        [latestPoint.lng, latestPoint.lat]
+                    ];
+                    forecastData.forEach(d => fCoords.push([d.lng, d.lat]));
+                    const rawLine = turf.lineString(fCoords);
+                    forecastAnim.fullSmoothLine = turf.bezierSpline(rawLine, { resolution: 5000, sharpness: 0.85 });
+                    forecastAnim.points = forecastData;
+                    forecastAnim.latestPoint = latestPoint;
+                    forecastAnim.currentTcId = tcId;
+
+                    const firstIntensity = forecastData[0]?.intensity || 'TD';
+                    forecastAnim.coneLayer = L.geoJSON(null, {
+                        style: { color: '#8bc34a', weight: 0, fillColor: '#cddc39', fillOpacity: 0.25 }
+                    }).addTo(trackLayer);
+                    forecastAnim.lineLayer = L.geoJSON(null, {
+                        style: { color: intensityColors[firstIntensity] || intensityColors.default, weight: 3.5,
+                            opacity: 1 }
+                    }).addTo(trackLayer);
+                    forecastAnim.markerLayer = L.layerGroup().addTo(trackLayer);
+
+                    startForecastAnimation(true);
+                }
+
+                return pastData.map(d => [d.lat, d.lng]).concat(forecastData.map(d => [d.lat, d.lng]));
+            } catch (e) {
+                console.error(`加載熱帶氣旋 ${tcId} 失敗:`, e);
+                tcDistances[tcId] = null;
+                return [];
+            }
+        }
+
+        // ============================================================
+        // 距離面板更新
+        // ============================================================
+        function updateDistancePanel(tcIds) {
+            const panel = document.getElementById('distance-panel');
+            if (!panel) return;
+            let html = '<strong>距離澳門</strong>';
+            if (!tcIds || tcIds.length === 0) {
+                html += '無資料';
+                panel.innerHTML = html;
+                return;
+            }
+            let hasData = false;
+            tcIds.forEach(id => {
+                const dist = tcDistances[id];
+                if (dist !== undefined && dist !== null) {
+                    const displayName = TC_DISPLAY_NAMES[id] || id;
+                    html += `${displayName}: ${dist} 公里<br>`;
+                    hasData = true;
+                }
+            });
+            if (!hasData) html += '無實時位置';
+            panel.innerHTML = html;
+        }
+
+        // ============================================================
+        // 初始化
+        // ============================================================
+        async function init() {
+            stopForecastAnimation();
+            forecastAnim.fullSmoothLine = null;
+            forecastAnim.points = [];
+            forecastAnim.progress = 0;
+            forecastAnim.pausedElapsed = 0;
+            trackLayer.clearLayers();
+            drawAlertCircles(trackLayer);
+            const target = document.getElementById('tc-selector').value;
+            tcDistances = {};
+            let allBounds = [];
+            document.getElementById('fc-intensity').textContent = '--';
+            document.getElementById('fc-name').textContent = '--';
+            document.getElementById('fc-tag').textContent = '--';
+            document.getElementById('fc-datetime').textContent = '--';
+            try {
+                const tcIds = target === 'all' ? TC_LIST : [target];
+                for (const tcId of tcIds) {
+                    const points = await drawSingleTC(tcId);
+                    if (points.length > 0) allBounds = allBounds.concat(points);
+                }
+                updateDistancePanel(tcIds);
+                if (allBounds.length > 0) map.fitBounds(allBounds, { padding: [50, 50] });
+            } catch (e) {
+                console.error("數據加載失敗:", e);
+                updateDistancePanel([]);
+            }
+        }
+        init();
+
+        // ============================================================
+        // 雷達 / 衛星 圖層
+        // ============================================================
+        var apiData = {};
+        var mapFrames = [];
+        var animationPosition = 0;
+        var animationTimer = false;
+        var currentLayer = null;
+        var isLoading = false;
+        var layerCache = {};
+        var radarVisible = false;
+        var satVisible = false;
+
+        function formatTime(timestamp) {
+            return new Date(timestamp * 1000).toLocaleTimeString('zh-HK', { hour: '2-digit', minute: '2-digit',
+                hour12: false });
+        }
+
+        function createRadarLayer(frame) {
+            return new L.TileLayer(apiData.host + frame.path + '/256/{z}/{x}/{y}/2/1_1.png', {
+                tileSize: 256,
+                opacity: 0.001,
+                maxNativeZoom: 7,
+                maxZoom: 16
+            });
+        }
+
+        function stop() {
+            if (animationTimer) {
+                clearTimeout(animationTimer);
+                animationTimer = false;
+                document.getElementById("playBtn").innerHTML = "▶";
+                return true;
+            }
+            return false;
+        }
+
+        function play() {
+            animationTimer = true;
+            document.getElementById("playBtn").innerHTML = "⏸";
+            showFrame(animationPosition + 1);
+        }
+
+        function playStop() { if (!stop()) play(); }
+
+        function updateTimestamp(frame) { document.getElementById("timestamp").innerHTML = formatTime(frame.time); }
+
+        function showFrame(position) {
+            if (isLoading || mapFrames.length === 0) return;
+            position = (position + mapFrames.length) % mapFrames.length;
+            var frame = mapFrames[position];
+            updateTimestamp(frame);
+            if (typeof updateSatelliteLayer === 'function') updateSatelliteLayer(frame);
+            var oldLayer = currentLayer;
+            if (layerCache[position]) {
+                if (oldLayer) oldLayer.setOpacity(0);
+                layerCache[position].setOpacity((satVisible || !radarVisible) ? 0 : 0.8);
+                currentLayer = layerCache[position];
+                animationPosition = position;
+                if (animationTimer) animationTimer = setTimeout(play, 500);
+                return;
+            }
+            isLoading = true;
+            var newLayer = createRadarLayer(frame);
+            newLayer.on('load', function() {
+                newLayer.setOpacity((satVisible || !radarVisible) ? 0 : 0.8);
+                if (oldLayer) oldLayer.setOpacity(0);
+                layerCache[position] = newLayer;
+                currentLayer = newLayer;
+                animationPosition = position;
+                isLoading = false;
+                if (animationTimer) animationTimer = setTimeout(play, 500);
+            });
+            newLayer.addTo(map);
+        }
+
+        function getGibsTime(timestamp) {
+            var d = new Date((timestamp - 5400) * 1000);
+            d.setUTCMinutes(Math.floor(d.getUTCMinutes() / 10) * 10);
+            d.setUTCSeconds(0);
+            return d.toISOString().split('.')[0] + 'Z';
+        }
+
+        var satLayerCache = {};
+        var currentSatLayer = null;
+
+        function updateSatelliteLayer(frame) {
+            if (!satVisible || !frame) return;
+            var exactTimeStr = getGibsTime(frame.time);
+            if (satLayerCache[exactTimeStr]) {
+                if (currentSatLayer && currentSatLayer !== satLayerCache[exactTimeStr]) currentSatLayer.setOpacity(0);
+                satLayerCache[exactTimeStr].setOpacity(0.75);
+                currentSatLayer = satLayerCache[exactTimeStr];
+            } else {
+                var himawariWorldview = L.tileLayer(
+                    'https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/Himawari_AHI_Band13_Clean_Infrared/default/{time}/GoogleMapsCompatible_Level6/{z}/{y}/{x}.png', {
+                        time: exactTimeStr,
+                        tileSize: 256,
+                        transparent: true,
+                        opacity: 0.75,
+                        maxNativeZoom: 6,
+                        maxZoom: 18,
+                        zIndex: 10,
+                        keepBuffer: 4,
+                        updateWhenIdle: false,
+                        crossOrigin: true
+                    });
+                himawariWorldview.addTo(map);
+                satLayerCache[exactTimeStr] = himawariWorldview;
+                if (currentSatLayer) currentSatLayer.setOpacity(0);
+                currentSatLayer = himawariWorldview;
+            }
+        }
+
+        function handleWeatherLayerChange(value) {
+            stop();
+            radarVisible = false;
+            satVisible = false;
+            document.getElementById('radar-ui-container').style.display = 'none';
+            if (currentLayer) currentLayer.setOpacity(0);
+            if (currentSatLayer) { currentSatLayer.setOpacity(0);
+                currentSatLayer = null; }
+            Object.values(satLayerCache).forEach(layer => { if (map.hasLayer(layer)) map.removeLayer(layer); });
+            satLayerCache = {};
+            var legendSubpanel = document.getElementById('radar-legend-subpanel');
+            if (value === 'radar') {
+                radarVisible = true;
+                legendSubpanel.style.display = 'block';
+                document.getElementById('radar-ui-container').style.display = 'block';
+                loadOrShowData();
+            } else if (value === 'satellite') {
+                satVisible = true;
+                legendSubpanel.style.display = 'none';
+                document.getElementById('radar-ui-container').style.display = 'block';
+                loadOrShowData();
+            }
+        }
+
+        function loadOrShowData() {
+            if (mapFrames.length === 0) {
+                var apiRequest = new XMLHttpRequest();
+                apiRequest.open("GET", "https://api.rainviewer.com/public/weather-maps.json", true);
+                apiRequest.onload = function() {
+                    if (apiRequest.status >= 200 && apiRequest.status < 400) {
+                        apiData = JSON.parse(apiRequest.response);
+                        mapFrames = apiData.radar.past;
+                        animationPosition = mapFrames.length - 1;
+                        showFrame(animationPosition);
+                    }
+                };
+                apiRequest.send();
+            } else {
+                showFrame(animationPosition);
+            }
+        }
+
+        function toggleForecastImg() {
+            const target = document.getElementById('tc-selector').value;
+            const overlay = document.getElementById('img-overlay');
+            const img = document.getElementById('forecast-img-src');
+            if (target === 'all') {
+                img.src = `TC-ALL.png?t=${new Date().getTime()}`;
+            } else {
+                img.src = `TC_forecast_${target}.png?t=${new Date().getTime()}`;
+            }
+            overlay.style.display = 'flex';
+        }
+
+        console.log('🌀 MMC 熱帶氣旋預報GIS 已啟動');
+    </script>
+</body>
+</html>
