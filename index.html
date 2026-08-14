@@ -806,8 +806,9 @@
         </div>
         <div class="header-controls">
             <select id="tc-selector" onchange="init()">
-                <option value="all" selected>所有熱帶氣旋</option>
-                <option value="G">浪卡</option>
+                <!-- ★ 已移除 "所有熱帶氣旋" 選項，只保留單一選擇 ★ -->
+                <option value="G" selected>浪卡</option>
+                <option value="H">未命名</option>
             </select>
             <button id="fc-play-btn" class="fc-play-btn" onclick="toggleForecastPlay()">▶ 播放</button>
             <select id="fc-speed-select" class="fc-speed-select" onchange="setForecastSpeed(this.value)">
@@ -927,7 +928,6 @@
                 <div class="legend-item"><span class="dot dot-ty"></span><span class="label-text">TY 颱風</span></div>
                 <div class="legend-item"><span class="dot dot-sty"></span><span class="label-text">STY 強颱風</span></div>
                 <div class="legend-item" style="grid-column: 1 / -1; justify-self: start;"><span class="dot dot-suty"></span><span class="label-text">SUTY 超強颱風</span></div>
-                <!-- ★ 新增溫帶氣旋，置於超強颱風下方，顏色比低壓區深 -->
                 <div class="legend-item" style="grid-column: 1 / -1; justify-self: start;"><span class="dot dot-ex"></span><span class="label-text">EX 溫帶氣旋</span></div>
             </div>
         </div>
@@ -938,10 +938,9 @@
         // ============================================================
         // 核心配置
         // ============================================================
-        const TC_LIST = ['G'];
-        const TC_DISPLAY_NAMES = { 'G': '浪卡' };
+        const TC_LIST = ['G','H'];
+        const TC_DISPLAY_NAMES = { 'G': '浪卡' ,'H':'未命名'};
 
-        // ★ 修改 EX 顏色為 #b0b0b0（比 LPA 的 #dcdcdc 深）
         const intensityColors = {
             "LPA": "#dcdcdc",
             "EX": "#b0b0b0",
@@ -1368,9 +1367,9 @@
                     forecastAnim.coneLayer = L.geoJSON(null, {
                         style: { color: '#8bc34a', weight: 0, fillColor: '#cddc39', fillOpacity: 0.25 }
                     }).addTo(trackLayer);
+                    // 预报路径固定蓝色
                     forecastAnim.lineLayer = L.geoJSON(null, {
-                        style: { color: intensityColors[firstIntensity] || intensityColors.default, weight: 3.5,
-                            opacity: 1 }
+                        style: { color: '#3498db', weight: 3.5, opacity: 1 }
                     }).addTo(trackLayer);
                     forecastAnim.markerLayer = L.layerGroup().addTo(trackLayer);
 
@@ -1421,7 +1420,7 @@
             forecastAnim.pausedElapsed = 0;
             trackLayer.clearLayers();
             drawAlertCircles(trackLayer);
-            const target = document.getElementById('tc-selector').value;
+            const target = document.getElementById('tc-selector').value;  // 只能是 'G' 或 'H'
             tcDistances = {};
             let allBounds = [];
             document.getElementById('fc-intensity').textContent = '--';
@@ -1429,12 +1428,10 @@
             document.getElementById('fc-tag').textContent = '--';
             document.getElementById('fc-datetime').textContent = '--';
             try {
-                const tcIds = target === 'all' ? TC_LIST : [target];
-                for (const tcId of tcIds) {
-                    const points = await drawSingleTC(tcId);
-                    if (points.length > 0) allBounds = allBounds.concat(points);
-                }
-                updateDistancePanel(tcIds);
+                // 只加载选中的单个气旋
+                const points = await drawSingleTC(target);
+                if (points.length > 0) allBounds = allBounds.concat(points);
+                updateDistancePanel([target]);
                 if (allBounds.length > 0) map.fitBounds(allBounds, { padding: [50, 50] });
             } catch (e) {
                 console.error("數據加載失敗:", e);
@@ -1611,7 +1608,7 @@
             overlay.style.display = 'flex';
         }
 
-        console.log('🌀 MMC 熱帶氣旋預報GIS 已啟動');
+        console.log('🌀 MMC 熱帶氣旋預報GIS 已啟動 (單一氣旋模式)');
     </script>
 </body>
 </html>
