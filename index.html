@@ -807,8 +807,7 @@
         <div class="header-controls">
             <select id="tc-selector" onchange="init()">
                 <!-- ★ 已移除 "所有熱帶氣旋" 選項，只保留單一選擇 ★ -->
-                <option value="G" selected>浪卡</option>
-                <option value="H">未命名</option>
+                <option value="A" selected>潛在熱帶氣旋</option>
             </select>
             <button id="fc-play-btn" class="fc-play-btn" onclick="toggleForecastPlay()">▶ 播放</button>
             <select id="fc-speed-select" class="fc-speed-select" onchange="setForecastSpeed(this.value)">
@@ -938,8 +937,8 @@
         // ============================================================
         // 核心配置
         // ============================================================
-        const TC_LIST = ['G','H'];
-        const TC_DISPLAY_NAMES = { 'G': '浪卡' ,'H':'未命名'};
+        const TC_LIST = ['A'];
+        const TC_DISPLAY_NAMES = { 'A': '潛在熱帶氣旋' };
 
         const intensityColors = {
             "LPA": "#dcdcdc",
