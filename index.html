@@ -807,7 +807,7 @@
         <div class="header-controls">
             <select id="tc-selector" onchange="init()">
                 <!-- ★ 已移除 "所有熱帶氣旋" 選項，只保留單一選擇 ★ -->
-                <option value="A" selected>潛在熱帶氣旋</option>
+                <option value="A" selected>未命名</option>
             </select>
             <button id="fc-play-btn" class="fc-play-btn" onclick="toggleForecastPlay()">▶ 播放</button>
             <select id="fc-speed-select" class="fc-speed-select" onchange="setForecastSpeed(this.value)">
@@ -938,7 +938,7 @@
         // 核心配置
         // ============================================================
         const TC_LIST = ['A'];
-        const TC_DISPLAY_NAMES = { 'A': '潛在熱帶氣旋' };
+        const TC_DISPLAY_NAMES = { 'A': '未命名' };
 
         const intensityColors = {
             "LPA": "#dcdcdc",
